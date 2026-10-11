@@ -1,0 +1,96 @@
+# Управляется Ansible. Ручные правки будут перезаписаны.
+x-superset-build: &superset-build
+  context: ./build
+  args:
+    BASE_REGISTRY: "{{ image_registry }}"
+
+x-superset-env: &superset-env
+  SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+  SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD}
+  SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+  SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+
+services:
+  superset-db:
+    image: {{ superset_metadata_db_image }}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: ${SUPERSET_DB_PASSWORD}
+      POSTGRES_DB: superset
+    volumes:
+      - superset_db_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superset -d superset"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  superset-redis:
+    image: {{ superset_redis_image }}
+    restart: unless-stopped
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  superset-init:
+    build: *superset-build
+    image: data-platform/superset:5.0.0
+    user: root
+    command:
+      - bash
+      - -c
+      - >-
+        superset db upgrade &&
+        superset fab create-admin
+        --username "$${SUPERSET_ADMIN_USER}"
+        --password "$${SUPERSET_ADMIN_PASSWORD}"
+        --firstname Admin --lastname Admin
+        --email admin@example.local &&
+        superset init
+    environment: *superset-env
+    volumes:
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+    networks:
+      - internal
+    depends_on:
+      superset-db:
+        condition: service_healthy
+      superset-redis:
+        condition: service_healthy
+
+  superset:
+    build: *superset-build
+    image: data-platform/superset:5.0.0
+    container_name: superset
+    restart: unless-stopped
+    environment: *superset-env
+    volumes:
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+    ports:
+      - "{{ superset_web_publish_address }}:{{ superset_web_port }}:8088"
+    networks:
+      - internal
+      - platform
+    depends_on:
+      superset-db:
+        condition: service_healthy
+      superset-redis:
+        condition: service_healthy
+      superset-init:
+        condition: service_completed_successfully
+
+volumes:
+  superset_db_data:
+
+networks:
+  internal:
+  platform:
+    name: {{ platform_network }}
+    external: true

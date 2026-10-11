@@ -1,0 +1,22 @@
+---
+# Шаблон секретов. Не коммитьте настоящие значения.
+#
+#   cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+#   # замените все значения (пароли: только буквы и цифры)
+#   ansible-vault encrypt group_vars/all/vault.yml
+#
+# Сгенерировать значение:  openssl rand -hex 16
+# Fernet-ключ Airflow:     python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+
+vault_dwh_superuser_password: change_me
+vault_dwh_loader_password: change_me
+vault_dwh_reader_password: change_me
+
+vault_airflow_db_password: change_me
+vault_airflow_fernet_key: change_me_fernet
+vault_airflow_secret_key: change_me
+vault_airflow_admin_password: change_me
+
+vault_superset_db_password: change_me
+vault_superset_secret_key: change_me
+vault_superset_admin_password: change_me

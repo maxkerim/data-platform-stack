@@ -1,0 +1,19 @@
+# Управляется Ansible. Ручные правки будут перезаписаны.
+services:
+  nginx:
+    image: {{ nginx_image }}
+    container_name: platform-nginx
+    restart: unless-stopped
+    ports:
+      - "{{ nginx_https_port }}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - {{ nginx_cert_file }}:/etc/nginx/certs/platform.crt:ro
+      - {{ nginx_key_file }}:/etc/nginx/certs/platform.key:ro
+    networks:
+      - platform
+
+networks:
+  platform:
+    name: {{ platform_network }}
+    external: true

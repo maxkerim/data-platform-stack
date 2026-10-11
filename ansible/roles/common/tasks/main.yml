@@ -1,0 +1,33 @@
+---
+- name: Установить Docker и зависимости (только если включено)
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+      - python3-docker
+    state: present
+    update_cache: true
+  become: true
+  when: common_install_docker | bool
+
+- name: Проверить, что Docker доступен
+  ansible.builtin.command: docker --version
+  register: common_docker_version
+  changed_when: false
+
+- name: Проверить, что доступен плагин docker compose
+  ansible.builtin.command: docker compose version
+  register: common_compose_version
+  changed_when: false
+
+- name: Создать базовый каталог платформы
+  ansible.builtin.file:
+    path: "{{ platform_base_dir }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Создать общую docker-сеть платформы
+  community.docker.docker_network:
+    name: "{{ platform_network }}"
+    state: present

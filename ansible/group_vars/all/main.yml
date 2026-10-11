@@ -1,0 +1,48 @@
+---
+# Несекретные настройки. Секреты лежат в vault.yml (см. vault.yml.example).
+
+# --- Общее -------------------------------------------------------------
+platform_base_dir: /opt/data-platform
+platform_network: data_platform
+
+# Установить Docker через apt (Ubuntu/Debian). Если Docker уже есть, оставьте false.
+common_install_docker: false
+
+# Префикс внутреннего реестра образов для закрытого контура, с завершающим "/".
+# Пример: "registry.company.local/dockerhub-mirror/". Пусто = Docker Hub.
+image_registry: ""
+
+# --- DWH (PostgreSQL) ----------------------------------------------------
+dwh_postgres_image: "{{ image_registry }}postgres:16"
+dwh_container_name: dwh-postgres
+# Адрес DWH для Airflow и Superset. В однохостовой схеме это имя контейнера в общей сети.
+dwh_db_host: "{{ dwh_container_name }}"
+dwh_db_port: 5432
+dwh_db_name: dwh
+dwh_db_publish_address: "127.0.0.1"
+
+# --- Airflow ---------------------------------------------------------------
+airflow_uid: 50000
+airflow_admin_user: admin
+airflow_web_publish_address: "127.0.0.1"
+airflow_web_port: 8081
+airflow_inbox_dir: "{{ platform_base_dir }}/airflow/inbox"
+airflow_metadata_db_image: "{{ image_registry }}postgres:16"
+
+# --- Superset --------------------------------------------------------------
+superset_admin_user: admin
+superset_web_publish_address: "127.0.0.1"
+superset_web_port: 8088
+superset_metadata_db_image: "{{ image_registry }}postgres:16"
+superset_redis_image: "{{ image_registry }}redis:7-alpine"
+
+# --- Nginx (обратный прокси с TLS), по умолчанию выключен --------------------
+nginx_enabled: false
+nginx_image: "{{ image_registry }}nginx:1.27-alpine"
+nginx_https_port: 443
+airflow_fqdn: airflow.example.local
+superset_fqdn: superset.example.local
+# true = выпустить самоподписанный сертификат (для проверки). В бою укажите сертификат корпоративного CA.
+nginx_self_signed: true
+nginx_cert_file: "{{ platform_base_dir }}/nginx/certs/platform.crt"
+nginx_key_file: "{{ platform_base_dir }}/nginx/certs/platform.key"

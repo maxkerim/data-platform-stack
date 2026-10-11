@@ -1,0 +1,94 @@
+# Управляется Ansible. Ручные правки будут перезаписаны.
+x-airflow-common: &airflow-common
+  build:
+    context: ./build
+    args:
+      BASE_REGISTRY: "{{ image_registry }}"
+  image: data-platform/airflow:2.10.5
+  user: "{{ airflow_uid }}:0"
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__WORKERS: "1"
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
+    # Подключение к DWH под ролью-загрузчиком (conn_id = dwh_postgres)
+    AIRFLOW_CONN_DWH_POSTGRES: postgresql://dwh_loader:${DWH_LOADER_PASSWORD}@{{ dwh_db_host }}:{{ dwh_db_port }}/{{ dwh_db_name }}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - {{ airflow_inbox_dir }}:/opt/airflow/inbox
+    - airflow_logs:/opt/airflow/logs
+  networks:
+    - internal
+    - platform
+  depends_on:
+    airflow-db:
+      condition: service_healthy
+
+services:
+  airflow-db:
+    image: {{ airflow_metadata_db_image }}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    restart: unless-stopped
+    command: webserver
+    ports:
+      - "{{ airflow_web_publish_address }}:{{ airflow_web_port }}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    restart: unless-stopped
+    command: scheduler
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  airflow_db_data:
+  airflow_logs:
+
+networks:
+  internal:
+  platform:
+    name: {{ platform_network }}
+    external: true

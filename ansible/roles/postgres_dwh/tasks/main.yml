@@ -1,0 +1,39 @@
+---
+- name: Создать каталоги DWH
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ postgres_dwh_dir }}"
+    - "{{ postgres_dwh_dir }}/init"
+
+- name: Положить скрипт инициализации DWH (роли, схемы, таблицы)
+  ansible.builtin.template:
+    src: 01-init-dwh.sh.j2
+    dest: "{{ postgres_dwh_dir }}/init/01-init-dwh.sh"
+    mode: "0755"
+  become: true
+  no_log: true
+
+- name: Положить файл окружения
+  ansible.builtin.template:
+    src: dwh.env.j2
+    dest: "{{ postgres_dwh_dir }}/.env"
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Положить docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ postgres_dwh_dir }}/docker-compose.yml"
+    mode: "0644"
+  become: true
+
+- name: Запустить DWH
+  community.docker.docker_compose_v2:
+    project_src: "{{ postgres_dwh_dir }}"
+    state: present
+  become: true

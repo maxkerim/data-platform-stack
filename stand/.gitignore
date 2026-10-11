@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+
+# Данные для загрузки не коммитим, структуру папок сохраняем через .gitkeep
+data/inbox/*.xlsx
+data/inbox/archive/*
+data/inbox/rejected/*
+!data/inbox/archive/.gitkeep
+!data/inbox/rejected/.gitkeep

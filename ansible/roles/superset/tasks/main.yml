@@ -1,0 +1,46 @@
+---
+- name: Создать каталоги Superset
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ superset_dir }}"
+    - "{{ superset_dir }}/build"
+
+- name: Положить Dockerfile (добавляет драйвер PostgreSQL в образ)
+  ansible.builtin.copy:
+    src: "{{ superset_source_dir }}/Dockerfile"
+    dest: "{{ superset_dir }}/build/Dockerfile"
+    mode: "0644"
+  become: true
+
+- name: Положить superset_config.py
+  ansible.builtin.template:
+    src: superset_config.py.j2
+    dest: "{{ superset_dir }}/superset_config.py"
+    mode: "0644"
+  become: true
+
+- name: Положить файл окружения с секретами
+  ansible.builtin.template:
+    src: superset.env.j2
+    dest: "{{ superset_dir }}/.env"
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Положить docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ superset_dir }}/docker-compose.yml"
+    mode: "0644"
+  become: true
+
+- name: Запустить Superset
+  community.docker.docker_compose_v2:
+    project_src: "{{ superset_dir }}"
+    state: present
+    build: "{{ 'always' if superset_rebuild | bool else 'policy' }}"
+  become: true

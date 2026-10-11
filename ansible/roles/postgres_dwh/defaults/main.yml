@@ -1,0 +1,2 @@
+---
+postgres_dwh_dir: "{{ platform_base_dir }}/dwh"

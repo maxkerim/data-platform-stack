@@ -1,0 +1,6 @@
+---
+airflow_dir: "{{ platform_base_dir }}/airflow"
+# Источник Dockerfile, requirements и DAG-ов: тот же код, что и в стенде (stand/airflow).
+airflow_source_dir: "{{ playbook_dir }}/../stand/airflow"
+# Пересобрать образ при запуске: ansible-playbook ... -e airflow_rebuild=true
+airflow_rebuild: false

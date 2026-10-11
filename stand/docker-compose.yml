@@ -1,0 +1,141 @@
+# Тренировочный стенд: PostgreSQL (DWH) + Airflow + Superset.
+# Для обучения и отладки DAG-ов. Не production-конфигурация (см. README, раздел "Что поменять для prod").
+
+x-airflow-common: &airflow-common
+  build: ./airflow
+  user: "${AIRFLOW_UID:-50000}:0"
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__WORKERS: "1"
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@postgres:5432/airflow
+    # Подключение к DWH под ролью-загрузчиком (conn_id = dwh_postgres)
+    AIRFLOW_CONN_DWH_POSTGRES: postgresql://dwh_loader:${DWH_LOADER_PASSWORD}@postgres:5432/dwh
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./data/inbox:/opt/airflow/inbox
+    - airflow_logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      # Пароли ролей передаются в init-скрипт
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD}
+      DWH_LOADER_PASSWORD: ${DWH_LOADER_PASSWORD}
+      DWH_READER_PASSWORD: ${DWH_READER_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+
+  airflow-webserver:
+    <<: *airflow-common
+    restart: unless-stopped
+    command: webserver
+    ports:
+      - "127.0.0.1:8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    restart: unless-stopped
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  superset-init:
+    build: ./superset
+    image: dwh-superset:5.0.0
+    user: root
+    command:
+      - bash
+      - -c
+      - >-
+        superset db upgrade &&
+        superset fab create-admin
+        --username "$${SUPERSET_ADMIN_USER}"
+        --password "$${SUPERSET_ADMIN_PASSWORD}"
+        --firstname Admin --lastname Admin
+        --email admin@example.local &&
+        superset init
+    environment: &superset-env
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  superset:
+    build: ./superset
+    image: dwh-superset:5.0.0
+    restart: unless-stopped
+    environment: *superset-env
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    ports:
+      - "127.0.0.1:8088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      superset-init:
+        condition: service_completed_successfully
+
+volumes:
+  pg_data:
+  airflow_logs:

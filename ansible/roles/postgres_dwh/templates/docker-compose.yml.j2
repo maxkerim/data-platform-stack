@@ -1,0 +1,27 @@
+# Управляется Ansible. Ручные правки будут перезаписаны.
+services:
+  postgres:
+    image: {{ dwh_postgres_image }}
+    container_name: {{ dwh_container_name }}
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - dwh_pg_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "{{ dwh_db_publish_address }}:{{ dwh_db_port }}:5432"
+    networks:
+      - platform
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dwh_pg_data:
+
+networks:
+  platform:
+    name: {{ platform_network }}
+    external: true

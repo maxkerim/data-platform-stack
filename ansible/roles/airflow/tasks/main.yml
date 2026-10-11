@@ -1,0 +1,63 @@
+---
+- name: Создать каталоги Airflow
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ airflow_dir }}"
+    - "{{ airflow_dir }}/build"
+    - "{{ airflow_dir }}/dags"
+
+- name: Создать каталоги для Excel-файлов (владелец - пользователь Airflow в контейнере)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ airflow_uid }}"
+    mode: "0775"
+  become: true
+  loop:
+    - "{{ airflow_inbox_dir }}"
+    - "{{ airflow_inbox_dir }}/archive"
+    - "{{ airflow_inbox_dir }}/rejected"
+
+- name: Положить Dockerfile и requirements.txt для сборки образа
+  ansible.builtin.copy:
+    src: "{{ airflow_source_dir }}/{{ item }}"
+    dest: "{{ airflow_dir }}/build/{{ item }}"
+    mode: "0644"
+  become: true
+  loop:
+    - Dockerfile
+    - requirements.txt
+
+- name: Положить DAG-и
+  ansible.builtin.copy:
+    src: "{{ airflow_source_dir }}/dags/"
+    dest: "{{ airflow_dir }}/dags/"
+    mode: "0644"
+    directory_mode: "0755"
+  become: true
+
+- name: Положить файл окружения с секретами
+  ansible.builtin.template:
+    src: airflow.env.j2
+    dest: "{{ airflow_dir }}/.env"
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Положить docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ airflow_dir }}/docker-compose.yml"
+    mode: "0644"
+  become: true
+
+- name: Запустить Airflow
+  community.docker.docker_compose_v2:
+    project_src: "{{ airflow_dir }}"
+    state: present
+    build: "{{ 'always' if airflow_rebuild | bool else 'policy' }}"
+  become: true

@@ -1,0 +1,34 @@
+---
+# Основной playbook. Запуск целиком или по тегам:
+#   ansible-playbook site.yml --ask-vault-pass
+#   ansible-playbook site.yml --ask-vault-pass --tags dwh
+- name: Подготовка хостов
+  hosts: data_platform
+  roles:
+    - role: common
+      tags: [common]
+
+- name: DWH PostgreSQL
+  hosts: "{{ 'dwh' if 'dwh' in groups else 'data_platform' }}"
+  roles:
+    - role: postgres_dwh
+      tags: [dwh]
+
+- name: Airflow
+  hosts: "{{ 'airflow' if 'airflow' in groups else 'data_platform' }}"
+  roles:
+    - role: airflow
+      tags: [airflow]
+
+- name: Superset
+  hosts: "{{ 'superset' if 'superset' in groups else 'data_platform' }}"
+  roles:
+    - role: superset
+      tags: [superset]
+
+- name: Обратный прокси
+  hosts: "{{ 'proxy' if 'proxy' in groups else 'data_platform' }}"
+  roles:
+    - role: nginx
+      when: nginx_enabled | bool
+      tags: [nginx]

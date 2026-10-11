@@ -1,0 +1,41 @@
+---
+- name: Создать каталоги nginx
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ nginx_dir }}"
+    - "{{ nginx_cert_file | dirname }}"
+
+- name: Выпустить самоподписанный сертификат (только для проверки, в бою нужен сертификат корпоративного CA)
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -newkey rsa:4096 -days 365
+      -keyout {{ nginx_key_file }} -out {{ nginx_cert_file }}
+      -subj "/CN={{ airflow_fqdn }}"
+      -addext "subjectAltName=DNS:{{ airflow_fqdn }},DNS:{{ superset_fqdn }}"
+    creates: "{{ nginx_cert_file }}"
+  become: true
+  when: nginx_self_signed | bool
+
+- name: Положить конфигурацию nginx
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_dir }}/nginx.conf"
+    mode: "0644"
+  become: true
+
+- name: Положить docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ nginx_dir }}/docker-compose.yml"
+    mode: "0644"
+  become: true
+
+- name: Запустить nginx
+  community.docker.docker_compose_v2:
+    project_src: "{{ nginx_dir }}"
+    state: present
+  become: true

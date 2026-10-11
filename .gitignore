@@ -1,0 +1,19 @@
+# Secrets and local environment
+.env
+.venv/
+ansible/group_vars/all/vault.yml
+ansible/inventory/hosts.ini
+ansible/collections/
+*.retry
+.vault_pass*
+
+# Python
+__pycache__/
+*.pyc
+
+# Local data: keep the folder structure, not the files
+stand/data/inbox/*.xlsx
+stand/data/inbox/archive/*
+stand/data/inbox/rejected/*
+!stand/data/inbox/archive/.gitkeep
+!stand/data/inbox/rejected/.gitkeep

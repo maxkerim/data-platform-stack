@@ -1,0 +1,24 @@
+"""Конфигурация Superset. Управляется Ansible. Секреты берутся из переменных окружения."""
+import os
+
+SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+
+# Служебная БД Superset (отдельный экземпляр PostgreSQL, не DWH)
+SQLALCHEMY_DATABASE_URI = (
+    f"postgresql+psycopg2://superset:{os.environ['SUPERSET_DB_PASSWORD']}@superset-db:5432/superset"
+)
+
+# Кеш результатов запросов и метаданных в Redis
+CACHE_CONFIG = {
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_DEFAULT_TIMEOUT": 300,
+    "CACHE_KEY_PREFIX": "superset_",
+    "CACHE_REDIS_URL": "redis://superset-redis:6379/0",
+}
+DATA_CACHE_CONFIG = {**CACHE_CONFIG, "CACHE_KEY_PREFIX": "superset_data_"}
+
+# За обратным прокси с TLS включаются защищённые cookie и учёт заголовков X-Forwarded-*
+ENABLE_PROXY_FIX = {{ 'True' if nginx_enabled | bool else 'False' }}
+SESSION_COOKIE_SECURE = {{ 'True' if nginx_enabled | bool else 'False' }}
+TALISMAN_ENABLED = False
+WTF_CSRF_ENABLED = True

@@ -1,0 +1,6 @@
+---
+superset_dir: "{{ platform_base_dir }}/superset"
+# Источник Dockerfile: тот же, что в стенде (stand/superset).
+superset_source_dir: "{{ playbook_dir }}/../stand/superset"
+# Пересобрать образ при запуске: ansible-playbook ... -e superset_rebuild=true
+superset_rebuild: false

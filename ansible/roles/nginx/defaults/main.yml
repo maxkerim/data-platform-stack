@@ -1,0 +1,2 @@
+---
+nginx_dir: "{{ platform_base_dir }}/nginx"
