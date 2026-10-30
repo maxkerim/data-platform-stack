@@ -22,6 +22,16 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false -lockfile=readonly
       - run: terraform validate
+      - name: Initialize and validate local Docker module
+        run: |
+          terraform -chdir=docker init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=docker validate
+      - name: Apply, smoke test, and destroy local Docker module
+        run: |
+          cd docker
+          trap 'terraform destroy -auto-approve -input=false' EXIT
+          terraform apply -auto-approve -input=false
+          curl --fail --retry 10 --retry-connrefused --retry-delay 2 http://127.0.0.1:18089/
 
   ansible:
     name: Ansible

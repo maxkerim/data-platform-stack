@@ -13,6 +13,11 @@ terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/terraform.tfvars
 terraform/crash.log
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/terraform.tfvars
+terraform/**/crash.log
 
 # Python
 __pycache__/

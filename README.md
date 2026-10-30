@@ -79,7 +79,20 @@ ansible-playbook -i inventory/hosts.ini site.yml --ask-vault-pass
 
 Roles: `common` (Docker check, shared network), `postgres_dwh`, `airflow`, `superset`, `nginx` (optional TLS reverse proxy; enable with `nginx_enabled: true`). Run a single part with tags, e.g. `--tags airflow`. Each service is its own Compose project under `/opt/data-platform/`. Airflow and Superset Dockerfiles and the DAG code are taken from `stand/`, so there is one source of truth.
 
-## Provision a VM with Terraform
+## Local Terraform Docker module
+
+For a real local Terraform apply without a cloud account, use the separate `terraform/docker/` module. It creates a Docker bridge network, a named content volume, and an Nginx container published only on `127.0.0.1:18089`. This is a small provider smoke test, not a VM and not the main platform deployment; use `stand/` with Docker Compose for the complete demo.
+
+```bash
+terraform -chdir=terraform/docker init
+terraform -chdir=terraform/docker apply
+curl http://127.0.0.1:18089/
+terraform -chdir=terraform/docker destroy
+```
+
+GitHub Actions runs this module against the runner's Docker Engine, checks the HTTP response, and destroys the resources. The Yandex Cloud configuration remains separate below for environments that need a VM.
+
+## Provision a cloud VM with Terraform
 
 Terraform creates an Ubuntu 22.04 VM in an existing Yandex Cloud subnet and permits SSH only from the CIDRs in `ssh_allowed_cidrs`. The subnet must have internet egress. Set Yandex Cloud credentials with `YC_TOKEN` or `YC_SERVICE_ACCOUNT_KEY_FILE`, then:
 
@@ -114,12 +127,13 @@ The Make target reads the VM IP from Terraform output, installs Docker, and runs
 |---|---|
 | `stand/` (Docker Compose) | Run on WSL: the DAG loads a valid file and rejects an invalid one, and Superset connects to the warehouse with a dataset on the mart view |
 | `ansible/` roles | Pass `ansible-playbook --syntax-check` and `ansible-lint`; templates render and pass `docker compose config`. Full deployment against a real host is the next thing to verify |
-| `terraform/` | Provisions a Yandex Cloud VM; checked by GitHub Actions |
+| `terraform/docker/` | Creates local Docker resources; CI applies, smoke-tests, and destroys them |
+| `terraform/` | Provisions a Yandex Cloud VM; configuration checked by GitHub Actions |
 
 ## Roadmap
 
 - Run the playbook end to end on a test VM and record the result here.
-- CI: GitHub Actions validates Terraform, runs `ansible-lint` and syntax checks, and validates Docker Compose on every push.
+- CI: GitHub Actions validates both Terraform configurations, applies and smoke-tests the local Docker module, runs `ansible-lint` and syntax checks, and validates Docker Compose on every push.
 - PostgreSQL backups (pgBackRest) and a restore check.
 - LDAP/AD login for Airflow and Superset.
 - Monitoring and DAG-failure alerts.
