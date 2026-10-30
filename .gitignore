@@ -7,6 +7,13 @@ ansible/collections/
 *.retry
 .vault_pass*
 
+# Terraform state and local variables
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/crash.log
+
 # Python
 __pycache__/
 *.pyc

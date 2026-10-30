@@ -8,6 +8,7 @@ Two ways to run it, from the same code:
 |---|---|---|
 | Local demo | [`stand/`](stand/) | Docker Compose on a laptop or WSL. Fastest way to see it work and to develop DAGs. |
 | Deployment | [`ansible/`](ansible/) | Ansible roles that deploy the platform to one or several Linux hosts. |
+| Infrastructure | [`terraform/`](terraform/) | Terraform creates a Yandex Cloud VM; Ansible configures it. |
 
 ## Architecture
 
@@ -78,6 +79,27 @@ ansible-playbook -i inventory/hosts.ini site.yml --ask-vault-pass
 
 Roles: `common` (Docker check, shared network), `postgres_dwh`, `airflow`, `superset`, `nginx` (optional TLS reverse proxy; enable with `nginx_enabled: true`). Run a single part with tags, e.g. `--tags airflow`. Each service is its own Compose project under `/opt/data-platform/`. Airflow and Superset Dockerfiles and the DAG code are taken from `stand/`, so there is one source of truth.
 
+## Provision a VM with Terraform
+
+Terraform creates an Ubuntu 22.04 VM in an existing Yandex Cloud subnet and permits SSH only from the CIDRs in `ssh_allowed_cidrs`. The subnet must have internet egress. Set Yandex Cloud credentials with `YC_TOKEN` or `YC_SERVICE_ACCOUNT_KEY_FILE`, then:
+
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+# Set cloud_id, folder_id, subnet_id, and your trusted SSH CIDR in terraform.tfvars
+terraform -chdir=terraform init
+terraform -chdir=terraform plan
+terraform -chdir=terraform apply
+```
+
+Create and encrypt `ansible/group_vars/all/vault.yml` as described above, then configure the VM:
+
+```bash
+cd ansible
+make deploy-vm
+```
+
+The Make target reads the VM IP from Terraform output, installs Docker, and runs the existing playbook. Terraform state is local by default; keep it private and configure a remote state backend before team or production use. GitHub Actions validates Terraform, Ansible, and the local Compose configuration on every push and pull request. It does not create cloud resources.
+
 ## Designed for restricted corporate networks
 
 - `image_registry` points every image at an internal registry mirror (Harbor, Nexus, Artifactory); the Dockerfiles accept the same prefix as a build argument.
@@ -92,11 +114,12 @@ Roles: `common` (Docker check, shared network), `postgres_dwh`, `airflow`, `supe
 |---|---|
 | `stand/` (Docker Compose) | Run on WSL: the DAG loads a valid file and rejects an invalid one, and Superset connects to the warehouse with a dataset on the mart view |
 | `ansible/` roles | Pass `ansible-playbook --syntax-check` and `ansible-lint`; templates render and pass `docker compose config`. Full deployment against a real host is the next thing to verify |
+| `terraform/` | Provisions a Yandex Cloud VM; checked by GitHub Actions |
 
 ## Roadmap
 
 - Run the playbook end to end on a test VM and record the result here.
-- CI: GitHub Actions running `ansible-lint` and `docker compose config` on every push.
+- CI: GitHub Actions validates Terraform, runs `ansible-lint` and syntax checks, and validates Docker Compose on every push.
 - PostgreSQL backups (pgBackRest) and a restore check.
 - LDAP/AD login for Airflow and Superset.
 - Monitoring and DAG-failure alerts.
